@@ -1,7 +1,7 @@
 import React, { Component } from "react";
 import "semantic-ui-css/semantic.min.css";
 import styled from "styled-components";
-import { Icon } from "semantic-ui-react";
+import { Button } from "semantic-ui-react";
 
 import buzzer from "./buzzer.mp3";
 import SettingsModal from "./SettingsModal";
@@ -11,7 +11,6 @@ const YELLOW = "#ffff00";
 const RED = "#f44336";
 const BLACK = "#000000";
 const WHITE = "#ffffff";
-
 
 const Wrapper = styled.div`
   height: 100vh;
@@ -28,21 +27,29 @@ const RemainingTime = styled.div`
   font-family: "Roboto Mono", monospace;
 `;
 
-const Settings = styled.div`
+const ButtonsRow = styled.div`
   position: absolute;
-  right: 15px;
-  bottom: 15px;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 50px;
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
 `;
 
 class App extends Component {
   state = {
     running: false,
+    minutes: 5,
+    seconds: 0,
     totalSeconds: 100,
     minutesRemaining: 5,
     secondsRemaining: 0,
     warnAtSeconds: 30,
-    showSettingsModal: false
+    showSettingsModal: false,
+    paused: false
   };
 
   componentDidMount() {
@@ -58,6 +65,26 @@ class App extends Component {
     clearInterval(this.interval);
     window.removeEventListener("keypress");
   }
+
+  _reset = () => {
+    clearInterval(this.interval);
+    let totalSeconds = this.state.minutes * 60 + this.state.seconds;
+    this.setState({
+      minutesRemaining: this.state.minutes,
+      secondsRemaining: this.state.seconds,
+      running: false,
+      paused: false,
+      totalSeconds
+    });
+  };
+
+  _pause = () => {
+    this.setState({ paused: true });
+  };
+
+  _resume = () => {
+    this.setState({ paused: false });
+  };
 
   _getBackground = seconds => {
     const { warnAtSeconds } = this.state;
@@ -83,6 +110,7 @@ class App extends Component {
 
   _startCountdown = () => {
     let { running, minutesRemaining, secondsRemaining } = this.state;
+    this.setState({ paused: false });
 
     if (!running) {
       let totalSeconds = minutesRemaining * 60 + secondsRemaining;
@@ -90,23 +118,26 @@ class App extends Component {
         { running: true, totalSeconds },
         () =>
           (this.interval = setInterval(() => {
-            let { totalSeconds } = this.state;
-            if (totalSeconds > 1) {
-              totalSeconds = totalSeconds - 1;
-              const minutesRemaining = Math.floor(totalSeconds / 60);
-              const secondsRemaining = totalSeconds - minutesRemaining * 60;
-              this.setState({
-                totalSeconds,
-                minutesRemaining,
-                secondsRemaining
-              });
-            } else {
-              this.setState({
-                totalSeconds: 0,
-                minutesRemaining: 0,
-                secondsRemaining: 0
-              });
-              this._playBuzzer();
+            const { paused } = this.state;
+            if (!paused) {
+              let { totalSeconds } = this.state;
+              if (totalSeconds > 1) {
+                totalSeconds = totalSeconds - 1;
+                const minutesRemaining = Math.floor(totalSeconds / 60);
+                const secondsRemaining = totalSeconds - minutesRemaining * 60;
+                this.setState({
+                  totalSeconds,
+                  minutesRemaining,
+                  secondsRemaining
+                });
+              } else {
+                this.setState({
+                  totalSeconds: 0,
+                  minutesRemaining: 0,
+                  secondsRemaining: 0
+                });
+                this._playBuzzer();
+              }
             }
           }, 1000))
       );
@@ -130,6 +161,8 @@ class App extends Component {
     this.setState({
       minutesRemaining: minutes,
       secondsRemaining: seconds,
+      minutes,
+      seconds,
       warnAtSeconds
     });
     this.toggleSettingsModal();
@@ -141,7 +174,9 @@ class App extends Component {
       secondsRemaining,
       warnAtSeconds,
       totalSeconds,
-      showSettingsModal
+      showSettingsModal,
+      running,
+      paused
     } = this.state;
     const minutes =
       minutesRemaining < 10 ? `0${minutesRemaining}` : minutesRemaining;
@@ -149,22 +184,58 @@ class App extends Component {
       secondsRemaining < 10 ? `0${secondsRemaining}` : secondsRemaining;
     const color = this._getColor(totalSeconds);
     const background = this._getBackground(totalSeconds);
+    const blackIcons = totalSeconds <= warnAtSeconds;
     return (
       <Wrapper background={background}>
         <RemainingTime color={color}>
           {minutes}:{seconds}
         </RemainingTime>
-        <Settings onClick={this.toggleSettingsModal}>
-          <Icon name="setting" inverted style={{ color: color }} />
-          <SettingsModal
-            minutes={minutesRemaining}
-            seconds={secondsRemaining}
-            warnAtSeconds={warnAtSeconds}
-            handleSave={this.saveSettings}
-            handleCancel={this.toggleSettingsModal}
-            open={showSettingsModal}
+        <ButtonsRow>
+          {(minutesRemaining === 0 &&
+            secondsRemaining === 0 &&
+            totalSeconds === 0) ||
+          paused ? (
+            <Button
+              icon="undo"
+              basic
+              onClick={this._reset}
+              inverted={!blackIcons}
+              color={blackIcons ? "black" : "grey"}
+            />
+          ) : null}
+          <Button
+            icon={!running || paused ? "play" : "pause"}
+            basic
+            inverted={!blackIcons}
+            color={blackIcons ? "black" : "grey"}
+            onClick={() => {
+              if (!running) {
+                this._startCountdown();
+                return;
+              }
+              if (paused) {
+                this._resume();
+              } else {
+                this._pause();
+              }
+            }}
           />
-        </Settings>
+          <Button
+            icon="setting"
+            basic
+            onClick={this.toggleSettingsModal}
+            inverted={!blackIcons}
+            color={blackIcons ? "black" : "grey"}
+          />
+        </ButtonsRow>
+        <SettingsModal
+          minutes={minutesRemaining}
+          seconds={secondsRemaining}
+          warnAtSeconds={warnAtSeconds}
+          handleSave={this.saveSettings}
+          handleCancel={this.toggleSettingsModal}
+          open={showSettingsModal}
+        />
       </Wrapper>
     );
   }
